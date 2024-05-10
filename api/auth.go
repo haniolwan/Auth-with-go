@@ -57,7 +57,11 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 
 	defer rows.Close()
 
-	token, _ := CreateToken(user)
+	token, _ := CreateToken(map[string]string{
+		"user_id":  user.UserId,
+		"username": user.Username,
+		"password": user.Password,
+	})
 	str.NewStore().Set("token_key", token)
 
 	cookie := http.Cookie{
@@ -106,7 +110,11 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	token, _ := CreateToken(user)
+	token, _ := CreateToken(map[string]string{
+		"user_id":  user.UserId,
+		"username": user.Username,
+		"password": user.Password,
+	})
 
 	cookie := http.Cookie{
 		Name:     "user_token",
@@ -141,10 +149,11 @@ func AuthUserMiddleware(next http.Handler) http.Handler {
 }
 
 type User struct {
-	UserId   string `json:"user_id"`
-	Username string `json:"username" validate:"required"`
-	Email    string `json:"email" validate:"required"`
-	Password string `json:"password" validate:"required"`
+	UserId     string `json:"user_id"`
+	Username   string `json:"username" validate:"required"`
+	Email      string `json:"email" validate:"required"`
+	Password   string `json:"password" validate:"required"`
+	IsVerified bool   `json:"isverified" sql:"isverified"`
 }
 
 type UserRequestBody struct {
@@ -169,11 +178,17 @@ func ScanRow(rows *sql.Rows) (*User, error) {
 
 var secretKey = os.Getenv("SECRET_kEY")
 
-func CreateToken(user *User) (string, error) {
+func CreateToken(params map[string]string) (string, error) {
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"user_id": user.UserId, "username": user.Username, "password": user.Password,
+	claims := jwt.MapClaims{
 		"exp": time.Now().Add(time.Hour * 24).Unix(),
-	})
+	}
+
+	for key, value := range params {
+		claims[key] = value
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	tokenString, err := token.SignedString([]byte(secretKey))
 	if err != nil {
