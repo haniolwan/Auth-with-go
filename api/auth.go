@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -57,7 +58,7 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 
 	defer rows.Close()
 
-	token, _ := CreateToken(map[string]string{
+	token, _, _ := CreateToken(map[string]string{
 		"user_id":  user.UserId,
 		"username": user.Username,
 		"password": user.Password,
@@ -73,6 +74,11 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	}
+
+	ctx := r.Context()
+	ctx = context.WithValue(ctx, "user", user)
+	r = r.WithContext(ctx)
+
 	http.SetCookie(w, &cookie)
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode("User signed in successfully")
@@ -110,11 +116,19 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	token, _ := CreateToken(map[string]string{
+	token, _, _ := CreateToken(map[string]string{
 		"user_id":  user.UserId,
 		"username": user.Username,
 		"password": user.Password,
 	})
+
+	verify_email_query := "INSERT INTO unverified_users (email, verification_token) VALUES (?, ?)"
+	_, verifyErr := db.DB.Exec(verify_email_query, user.Email, token)
+
+	if verifyErr != nil {
+		http.Error(w, "Cannot verify user", http.StatusBadRequest)
+		return
+	}
 
 	cookie := http.Cookie{
 		Name:     "user_token",
@@ -126,6 +140,11 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	}
 	http.SetCookie(w, &cookie)
+
+	// store user in request context
+	ctx := r.Context()
+	ctx = context.WithValue(ctx, "user", user)
+	r = r.WithContext(ctx)
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode("User registered successfully")
@@ -178,10 +197,11 @@ func ScanRow(rows *sql.Rows) (*User, error) {
 
 var secretKey = os.Getenv("SECRET_kEY")
 
-func CreateToken(params map[string]string) (string, error) {
+func CreateToken(params map[string]string) (string, int64, error) {
 
+	var expiration = time.Now().Add(time.Hour * 24).Unix()
 	claims := jwt.MapClaims{
-		"exp": time.Now().Add(time.Hour * 24).Unix(),
+		"exp": expiration,
 	}
 
 	for key, value := range params {
@@ -192,12 +212,12 @@ func CreateToken(params map[string]string) (string, error) {
 
 	tokenString, err := token.SignedString([]byte(secretKey))
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
-	return tokenString, nil
+	return tokenString, expiration, nil
 }
 
-func verifyToken(tokenString string) error {
+func VerifyToken(tokenString string) error {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])

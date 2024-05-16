@@ -6,6 +6,8 @@ import (
 	"net/smtp"
 	"os"
 	"strings"
+
+	"github.com/haniolwan/go-quiz/db"
 )
 
 func SendVerificationEmail(w http.ResponseWriter, r *http.Request) {
@@ -33,16 +35,16 @@ func SendVerificationEmail(w http.ResponseWriter, r *http.Request) {
 	var action = "Verify Email"
 	var website = "https://quiz.com"
 
-	token, _ := CreateToken(map[string]string{
+	token, _, _ := CreateToken(map[string]string{
 		"email": recipient,
 	})
 
-	var verify_link = "https://quiz.com/" + token
+	var verify_link = "https://quiz.com/?token=" + token
 
 	replacements := map[string]string{
-		"{{website}}":     website,
-		"{{action}}":      action,
-		"{{verify_link}}": verify_link,
+		"website":     website,
+		"action":      action,
+		"verify_link": verify_link,
 	}
 	emailContent := string(htmlTemplate)
 
@@ -67,4 +69,47 @@ func SendVerificationEmail(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "Verification email sent to %s", recipient)
+}
+
+func VerificationEmail(w http.ResponseWriter, r *http.Request) {
+	email := r.URL.Query().Get("email")
+
+	token := r.URL.Query().Get("token")
+
+	err := VerifyToken(token)
+
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, err)
+		return
+	}
+
+	query := `SELECT verification_token FROM unverified_users WHERE email = ?`
+
+	rows, _ := db.DB.Query(query, email)
+
+	var verification_token = ""
+
+	for rows.Next() {
+		err := rows.Scan(&verification_token)
+
+		if err != nil {
+			fmt.Println("Error scanning row:", err)
+			continue
+		}
+
+		if verification_token != "" {
+
+			update_is_verify_query := "UPDATE users SET is_verified = TRUE WHERE email = ?"
+
+			db.DB.Exec(update_is_verify_query, email)
+
+			deleteQuery := "DELETE FROM unverified_users WHERE email = ?"
+
+			db.DB.Exec(deleteQuery, email)
+
+			JsonResponse(w, 200, "User successfully verified")
+		}
+	}
+
 }

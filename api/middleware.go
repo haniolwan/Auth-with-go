@@ -11,7 +11,7 @@ func Auth(HandlerFunc http.HandlerFunc) http.HandlerFunc {
 
 		cookie, _ := r.Cookie("user_token")
 
-		err := verifyToken(cookie.Value)
+		err := VerifyToken(cookie.Value)
 
 		if err != nil {
 			w.WriteHeader(http.StatusUnauthorized)

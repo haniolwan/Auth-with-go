@@ -19,6 +19,8 @@ func main() {
 
 	http.HandleFunc("/send_verification_email", api.SendVerificationEmail)
 
+	http.HandleFunc("/verification_email", api.VerificationEmail)
+
 	// Run Server
 	fmt.Println("Quiz app server is running on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
