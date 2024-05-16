@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"net/http"
 )
 
@@ -14,12 +13,10 @@ func Auth(HandlerFunc http.HandlerFunc) http.HandlerFunc {
 		err := VerifyToken(cookie.Value)
 
 		if err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
-			fmt.Fprint(w, "401 Unauthorized - Access Denied")
+			JsonResponse(w, http.StatusUnauthorized, "401 Unauthorized - Access Denied")
 			return
 		}
 
 		HandlerFunc.ServeHTTP(w, r) // final line if success
-
 	}
 }

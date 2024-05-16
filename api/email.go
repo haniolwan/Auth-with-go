@@ -10,16 +10,27 @@ import (
 	"github.com/haniolwan/go-quiz/db"
 )
 
-func SendVerificationEmail(w http.ResponseWriter, r *http.Request) {
+func RecieveVerifyEmail(w http.ResponseWriter, r *http.Request) {
 
-	// Generate random token for user
+	user, _ := r.Context().Value(UserKey).(User)
 
-	recipient := r.URL.Query().Get("email")
+	var recipient = r.URL.Query().Get("email")
 
-	if recipient == "" {
-		http.Error(w, "Missing email parameter", http.StatusBadRequest)
+	var emailToVerify string
+	if recipient != "" {
+		emailToVerify = recipient
+	} else {
+		emailToVerify = user.Email
 	}
 
+	if err := verifyEmail(emailToVerify); err != nil {
+		JsonResponse(w, http.StatusInternalServerError, "Error sending verification email")
+	}
+	JsonResponse(w, http.StatusOK, fmt.Sprintf("Verification email sent to %s", recipient))
+
+}
+
+func verifyEmail(recipient string) error {
 	var secretPassword = os.Getenv("SECRET_PASSWORD")
 
 	smtpHost := "smtp.gmail.com"
@@ -63,15 +74,11 @@ func SendVerificationEmail(w http.ResponseWriter, r *http.Request) {
 	// Connect to the SMTP server
 	auth := smtp.PlainAuth("", username, secretPassword, smtpHost)
 	err := smtp.SendMail(fmt.Sprintf("%s:%d", smtpHost, smtpPort), auth, from, to, message)
+	return err
 
-	if err != nil {
-		http.Error(w, "Error sending verification email: "+err.Error(), http.StatusInternalServerError)
-	}
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Verification email sent to %s", recipient)
 }
 
-func VerificationEmail(w http.ResponseWriter, r *http.Request) {
+func VerifyEmailSubmit(w http.ResponseWriter, r *http.Request) {
 	email := r.URL.Query().Get("email")
 
 	token := r.URL.Query().Get("token")
@@ -108,7 +115,7 @@ func VerificationEmail(w http.ResponseWriter, r *http.Request) {
 
 			db.DB.Exec(deleteQuery, email)
 
-			JsonResponse(w, 200, "User successfully verified")
+			JsonResponse(w, http.StatusOK, "User successfully verified")
 		}
 	}
 

@@ -12,14 +12,14 @@ import (
 func main() {
 	godotenv.Load(".env")
 
+	// Auth
 	http.HandleFunc("/login", api.LoginUser)
 	http.HandleFunc("/register", api.RegisterUser)
+	http.HandleFunc("/send_verification_email", api.RecieveVerifyEmail)
+	http.HandleFunc("/verification_email", api.VerifyEmailSubmit)
 
+	// Home
 	http.HandleFunc("/home", api.Auth(api.Home))
-
-	http.HandleFunc("/send_verification_email", api.SendVerificationEmail)
-
-	http.HandleFunc("/verification_email", api.VerificationEmail)
 
 	// Run Server
 	fmt.Println("Quiz app server is running on http://localhost:8080")
